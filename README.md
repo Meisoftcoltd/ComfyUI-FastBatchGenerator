@@ -20,7 +20,7 @@ This custom node is designed to transform raw, unformatted text into highly expr
 
 **⚠️ Prerequisite:** This node is a high-level orchestrator. It **requires** the following custom node to be installed and active in your `custom_nodes/` directory:
 
-1.  **[ComfyUI-fish-speech](https://github.com/path-to-original-repo)** (The core inference engine).
+1.  **[ComfyUI-fish-speech](https://github.com/Meisoftcoltd/ComfyUI-fish-speech)** (The core inference engine).
     *   *Note: This node hooks into the `init_model` and `load_model` functions of the FishSpeech implementation.*
 
 **Python Dependencies:**
