@@ -1,6 +1,6 @@
 # ComfyUI-FastBatchGenerator 🚀
 
-**Version:** `beta 0.0.1`
+**Version:** `v0.0.1 (Initial Release)`
 
 ## Description
 A high-performance ComfyUI custom node designed to optimize inference workflows by consolidating multiple operations (like prompt batching and sampling) into a single execution pass, significantly reducing graph overhead and latency.
