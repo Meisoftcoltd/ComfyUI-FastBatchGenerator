@@ -8,6 +8,7 @@ Salidas: AUDIO último, LOG rutas MP3, trigger passthrough.
 """
 
 import gc
+import numpy as np
 import os
 import pathlib
 import re
@@ -15,8 +16,10 @@ import sys
 
 import folder_paths
 import torch
-import torchaudio
 from pydub import AudioSegment
+
+# Solo para resample — NO usamos torchaudio.save para evitar el fallo de torchcodec/FFmpeg
+import torchaudio.functional as TA_F
 
 _fs_base = os.path.join(
     os.path.dirname(os.path.realpath(__file__)), "../ComfyUI-fish-speech"
@@ -75,13 +78,21 @@ def _concat_with_silence(
 
 
 def _write_mp3(tensor: torch.Tensor, sr: int, path: str) -> None:
-    cpu = tensor.squeeze().cpu()
-    tmp = path.replace(".mp3", "_temp.wav")
-    torchaudio.save(tmp, cpu.unsqueeze(0), sr, backend="soundfile")
-    seg = AudioSegment.from_wav(tmp)
+    """tensor → numpy → pydub AudioSegment (desde memoria) → MP3. Sin torchaudio.save ni WAV temporal."""
+    import numpy as np
+    
+    audio_np = tensor.squeeze().cpu().numpy().astype(np.float32)
+    # Clip a [-1, 1] y convertir a PCM 16-bit
+    audio_np = np.clip(audio_np, -1.0, 1.0)
+    pcm_data = (audio_np * 32767).astype(np.int16).tobytes()
+    
+    seg = AudioSegment(
+        data=pcm_data,
+        sample_width=2,          # int16
+        frame_rate=sr,
+        channels=1,
+    )
     seg.export(path, format="mp3", bitrate="192k")
-    if os.path.exists(tmp):
-        os.remove(tmp)
 
 
 # ────────────────── Nodo ──────────────────
@@ -209,7 +220,7 @@ class FishSpeechUnifiedBatch:
             dev = next(dec_model.parameters()).device
             if wf.shape[1] > 1:
                 wf = wf.mean(dim=1, keepdim=True)
-            wf = torchaudio.functional.resample(wf, sr_in, dec_model.sample_rate).to(dev)
+            wf = TA_F.resample(wf, sr_in, dec_model.sample_rate).to(dev)
             alen = torch.tensor([wf.shape[2]], device=dev, dtype=torch.long)
             with torch.no_grad():
                 idxs, _ = dec_model.encode(wf, alen)
