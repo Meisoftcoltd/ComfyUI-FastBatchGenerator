@@ -62,8 +62,13 @@ def _concat_with_silence(
     sil = torch.zeros((1, samps), dtype=dt, device=dev)
     out: list[torch.Tensor] = []
     for t in tensors:
+        # DAC decoder puede devolver shapes inconsistentes (2D o 3D).
+        # Normalizar a [1, samples] squeezando todas las dims > 1 hasta dejar shape=(batch, time)
+        while t.ndim > 2:
+            t = t.squeeze(0)
         if t.ndim == 1:
             t = t.unsqueeze(0)
+        # Ahora es (1, N) consistente
         out.append(t.to(dev).to(dt))
         out.append(sil)
     return torch.cat(out, dim=1)
