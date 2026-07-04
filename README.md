@@ -1,113 +1,96 @@
-# 🐟 FishSpeech Unified Batch Generator — ComfyUI Custom Node
+# 🐟 FishSpeech Unified Batch Generator para ComfyUI
 
-Consolida toda la cadena de Text-to-Speech de FishSpeech (Carga Modelo → Encoder Referencia → Generación Semántica LLaMA → Decodificación DAC → Concatenación) en **un solo nodo**. Procesa lotes de archivos de texto, gestiona eficientemente la VRAM y guarda los resultados como MP3 individuales organizados por proyecto.
+¡Hola! Este nodo fue creado por una razón muy concreta: el proceso normal de texto a voz con FishSpeech requiere encadenar 5 o 6 nodos diferentes (cargar modelo, codificar referencia, generar tokens semánticos, decodificar audio, concatenar y guardar). Cada uno consume recursos, añade complejidad al flujo y es fácil que algo se desconecte por el camino.
+
+**Aquí todo eso se redujo a un solo nodo.** Le das texto y te devuelve voz en formato MP3, organizada por carpetas, con opciones para ajustar volumen, velocidad y tono sin necesidad de añadir nodos extra.
 
 ---
 
-## 📥 Instalación
+## 🎯 ¿Qué hace exactamente?
+
+Imagina que tienes varios archivos de texto, uno por personaje o escena. Puedes conectarlos todos aquí desde un lector de archivos, un bot de Telegram, o cualquier nodo upstream. El nodo se encarga de:
+
+1. **Leer el texto** y dividirlo en trozos manejables (párrafos, oraciones o todo junto)
+2. **Generar los tokens** usando el modelo LLaMA de FishSpeech
+3. **Convertir esos tokens a audio real** con el decodificador DAC
+4. **Normalizar el volumen** opcionalmente para que suene consistente
+5. **Ajustar velocidad y tono** si lo necesitas, usando la misma tecnología de Spotify (Pedalboard)
+6. **Guardar como MP3** en una carpeta limpia que lleva el nombre de tu archivo original
+
+Al final tienes todos tus archivos de audio organizados y listos para conectar con PreviewAudio, Telegram o cualquier otro nodo downstream. La salida AUDIO del último archivo también está disponible directamente si necesitas previsualizarlo sin salir de ComfyUI.
+
+---
+
+## 🔧 ¿Cómo lo instalo?
 
 ```bash
-cd ComfyUI/custom_nodes/
+cd tu/ComfyUI/custom_nodes/
 git clone https://github.com/Meisoftcoltd/ComfyUI-FastBatchGenerator.git
 pip install -r ComfyUI-FastBatchGenerator/requirements.txt
-# Reiniciar ComfyUI
 ```
 
-**Requerimientos previos:** Necesitas [ComfyUI-fish-speech](https://github.com/Meisoftcoltd/ComfyUI-fish-speech) instalado en `custom_nodes/` — este nodo llama a sus funciones internas (`init_llama_model`, `load_dac_model`).
+Reinicia ComfyUI y aparecerá como **🐟 FishSpeech Unified Batch (MP3)** bajo la categoría *Audio → Batch*.
+
+> **Importante:** Necesitas tener instalado [ComfyUI-fish-speech](https://github.com/Meisoftcoltd/ComfyUI-fish-speech) en tu carpeta de `custom_nodes/`. Este nodo no duplica los modelos: simplemente reutiliza las funciones internas de FishSpeech para mantener todo ligero.
 
 ---
 
-## 🔧 Inputs del Nodo
+## 🎛️ Entradas principales
 
-### Entradas Requeridas (cableadas desde upstream)
+Solo necesitas cablear dos cosas desde upstream y el resto ya trae valores por defecto que funcionan bien:
 
-| Input | Tipo | Descripción |
-|-------|------|-------------|
-| `text_list` | STRING | Texto completo a sintetizar. Conectar desde BatchTextFileReader o nodo Telegram. |
-| `file_names` | STRING | Nombres de archivo separados por coma. Usado para nomenclatura de salida. |
+| Campo | ¿Cómo se conecta? | Descripción |
+|-------|-----------------|-------------|
+| **text_list** | STRING (cableado) | El texto a convertir en voz. Puede venir de BatchTextFileReader, TelegramSuite o cualquier fuente de texto. |
+| **file_names** | STRING (cableado) | Los nombres de archivo separados por coma, uno por cada bloque de texto. Se usa para crear las carpetas y nombrar los MP3 resultantes. |
 
-### Configuración del Modelo (ajustable en el nodo)
-
-| Input | Tipo & Rango | Default | Descripción |
-|-------|-------------|---------|-------------|
-| `checkpoint_path` | STRING | `"models/fish_speech/s2-pro"` | Ruta al directorio del modelo FishSpeech. |
-| `llama_device` | ENUM: `cuda`, `cpu` | `cpu` | Dispositivo para generar tokens LLaMA. |
-| `decoder_device` | ENUM: `cuda`, `cpu` | `cuda` | Dispositivo para el DAC decoder. |
-| `precision` | ENUM: `bfloat16`, `float16`, `float32` | `bfloat16` | Precisión del modelo (menor = menos VRAM). |
-| `split_mode` | ENUM | `Párrafos` | Criterio de división de texto en chunks. |
-| `temperature` | FLOAT 0.10–2.00 | `0.75` | Temperatura de generación LLaMA. |
-| `top_p` | FLOAT 0.10–1.00 | `0.80` | Umbral de muestreo nucleus. |
-| `repetition_penalty` | FLOAT 0.50–2.00 | `1.10` | Factor contra repeticiones. |
-| `chunk_length` | INT 50–4096 | `200` | Tokens máximos por chunk de generación. |
-| `max_new_tokens` | INT 128–8192 | `4096` | Límite total de tokens generados. |
-| `silence_duration` | FLOAT 0.0–5.0 | `0.3` | Silencio (segundos) entre chunks concatenados. |
-
-### Entradas Opcionales (conectar desde la derecha, defaults backward-compatible ✅)
-
-| Input | Tipo | Default | Descripción |
-|-------|------|---------|-------------|
-| `reference_audio` | AUDIO | — | Audio de referencia para voice cloning. |
-| `prompt_text` | STRING | `""` | Texto extra añadido a cada segmento generado. |
-| `trigger_in` | * | — | Passthrough para cadenas secuenciales. |
-
-### 🔊 Control de Normalización (desde FishSpeechDecoder)
-
-| Input | Tipo | Default | Descripción |
-|-------|------|---------|-------------|
-| **`normalize_audio`** | BOOLEAN | ✅ `True` | Activar normalización de pico por chunk. |
-| **`target_peak_db`** | FLOAT -10→0 | `-1.0` | Nivel pico objetivo en decibelios (más bajo = más suave). |
-
-### 🎸 Control de Time Stretch / Pitch (desde AudioTimeStretchPedalboard)
-
-| Input | Tipo | Default | Descripción |
-|-------|------|---------|-------------|
-| **`time_stretch_enabled`** | BOOLEAN | ❌ `False` | Activa post-procesamiento con Pedalboard. Apagado = sin overhead. |
-| **`speed_factor`** | FLOAT 0.50→2.00 | `1.0` | Factor de velocidad: <1 ralentiza, >1 acelera. |
-| **`pitch_shift_semitones`** | FLOAT -12→12 | `0.0` | Desplazamiento de tono en semitonos. Negativo = más grave, positivo = más agudo. |
+A partir de ahí tienes un montón de controles que puedes ajustar sin cablear nada: desde el dispositivo donde corre cada modelo (GPU o CPU), la precisión numérica del cálculo (bfloat16, float16, float32), hasta parámetros creativos como temperatura, top-p y repetición. Todo está dentro del mismo nodo con valores por defecto seguros para empezar.
 
 ---
 
-## 📤 Outputs
+## 🎚️ Normalización de volumen
 
-| Puerto | Tipo | Descripción |
-|--------|------|-------------|
-| `audio_output` | AUDIO | Última forma de onda generada (3D tensor) + sample_rate — lista para PreviewAudio / Save. |
-| `batch_log` | STRING | Log multilinea con conteos, timestamps y rutas de salida. |
-| `trigger_out` | * | Passthrough trigger para encadenar batches secuenciales. |
+Activada por defecto. El nodo iguala cada fragmento a un nivel pico objetivo antes de guardar el MP3 final — esto evita que unos párrafos suenen más fuertes que otros. Puedes cambiar el nivel objetivo (`target_peak_db`) de -10 dB (suave) a 0 dB (al máximo), o desactivar toda la normalización simplemente marcando `normalize_audio` como **False**.
 
 ---
 
-## 📁 Estructura de Salida
+## 🏃‍♂️ Velocidad y tono con Pedalboard
+
+Esta funcionalidad está apagada por defecto para no añadir overhead. Cuando la actives, puede:
+
+- **Cambiar la velocidad** (`speed_factor`): 0.5x para lentitud dramática, 2.0x para locución rápida. Valores entre ambos se interpolan de forma natural y transparente gracias a los algoritmos de time-stretch de Spotify.
+- **Cambiar el tono** (`pitch_shift_semitones`): de -12 semitonos (una octava más grave) a +12 (una octava más aguda). Funciona independientemente del cambio de velocidad, así que puedes ralentizar sin cambiar el tono o viceversa.
+
+Si por alguna razón Pedalboard no está disponible en tu instalación, se registra un aviso en el log y continuea salvando el MP3 igual — nunca bloquea la ejecución.
+
+---
+
+## 📂 ¿Por dónde salen los archivos?
+
+Se respeta completamente tu configuración de salida de ComfyUI (incluyendo unidades externas o montajes de red). Para cada nombre de archivo detectado se crea:
 
 ```
-<ComfyUI_Output>/
-└── <Stem_Del_Archivo_Source>/
-    └── <Stem_Del_Archivo_Source>.mp3
+<tu_directorio_de_output_ComfyUI>/
+└── NombreDelArchivo/
+    └── NombreDelArchivo.mp3
 ```
 
-Usa internamente `folder_paths.get_output_directory()` — respeta completamente tu configuración de salida de ComfyUI (unidades externas, mounts de red, etc.).
+Nada de números aleatorios, timestamps ni sufijos misteriosos. El archivo resultante lleva exactamente el mismo nombre que el original, sin extensión.
 
 ---
 
-## ⚙️ Flujo de Procesamiento por Archivo del Batch
+## ❓ Solución de problemas rápidos
 
-```
-Texto Input → Split (modo configurado) 
-    → LLaMA genera tokens 
-        → DAC decodifica a waveform 
-            → Normalizar volumen (si normalize_audio = ON)
-                → Time Stretch + Pitch Shift (si time_stretch_enabled = ON)
-                    → Escribe MP3 → Disco + retorna tensor AUDIO 3D para ComfyUI
-```
+**"No se detectan los textos individualmente"** → El parser acepta tanto saltos simples (`\n`) como dobles (`\n\n`). Si ves un desajuste en el log con los previews numéricos, revisa que cada archivo coincida con su bloque de texto correspondiente.
+
+**"Error con torchcodec / FFmpeg"** → No debería aparecer. La codificación MP3 usa únicamente pydub escribiendo bytes PCM directamente desde memoria, sin librerías externas problemáticas. Si lo ves, asegúrate de estar en la última versión (`git pull` + `pip install -r requirements.txt`).
+
+**"El audio suena muy bajo o distorsionado"** → Ajusta `target_peak_db`. Con el valor predeterminado (-1 dB) debería sonar alto pero sin corte. Si baja a -6 dB o inferior, el nivel general cae mucho y suena plano.
 
 ---
 
-## 📋 Versionado
+## ✉️ ¿Problemas, sugerencias o pull requests?
 
-| Tag | Fecha | Cambios |
-|-----|-------|---------|
-| **v0.1.0** | *Current* | Lanzamiento estable: normalización configurable (`normalize_audio`, `target_peak_db`), post-procesamiento time stretch/pitch via pedalboard, solución torchcodec (MP3 puro con pydub), tensor AUDIO 3D compatible, parser robusto de textos múltiples en `\n` o `\n\n`. |
+El repositorio es abierto y acepta contribuciones. Si este nodo te resultó útil para algún flujo de trabajo específico, compártelo. Si encuentra un caso límite roto, repórtalo con confianza.
 
----
-
-*Desarrollado con ❤️ para flujos TTS de alto rendimiento en ComfyUI.*
+*Hecho con ❤️ para flujos TTS productivos en ComfyUI.*
