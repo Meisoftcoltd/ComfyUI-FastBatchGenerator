@@ -138,7 +138,12 @@ class FishSpeechUnifiedBatch:
             logs.append(str(m))
 
         # ── 0. Parsear nombres y textos ────────────────
-        raw_names = [n.strip() for n in file_names.split(",") if n.strip()]
+        # ── Normalizar entradas (ComfyUI a veces cast STRING→list) ──
+        if isinstance(file_names, list):
+            raw_names = [str(n).strip() for n in file_names if str(n).strip()]
+        else:
+            raw_names = [n.strip() for n in file_names.split(",") if n.strip()]
+
         if not raw_names:
             _log("⚠️ No se recibieron nombres de archivo.")
             empty = {"waveform": torch.zeros((1, 1, 22050)), "sample_rate": 22050}
@@ -147,9 +152,14 @@ class FishSpeechUnifiedBatch:
         stems = [pathlib.Path(n).stem for n in raw_names]
         _log(f"📂 {len(stems)} archivos: {', '.join(raw_names)}")
 
-        groups = [g.strip() for g in text_list.split("\n\n") if g.strip()]
-        if not groups or len(groups) == 1 and "\n\n" not in text_list:
-            groups = [text_list]
+        # ── Normalizar text_list ──
+        if isinstance(text_list, list):
+            groups = [str(t).strip() for t in text_list if str(t).strip()]
+        else:
+            raw = text_list
+            groups = [g.strip() for g in raw.split("\n\n") if g.strip()]
+            if not groups or (len(groups) == 1 and "\n\n" not in raw):
+                groups = [raw]
         while len(groups) < len(stems):
             groups.append("")
 
