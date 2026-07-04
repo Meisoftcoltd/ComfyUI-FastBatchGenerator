@@ -77,7 +77,7 @@ def _concat_with_silence(
 def _write_mp3(tensor: torch.Tensor, sr: int, path: str) -> None:
     cpu = tensor.squeeze().cpu()
     tmp = path.replace(".mp3", "_temp.wav")
-    torchaudio.save(tmp, cpu.unsqueeze(0), sr)
+    torchaudio.save(tmp, cpu.unsqueeze(0), sr, backend="soundfile")
     seg = AudioSegment.from_wav(tmp)
     seg.export(path, format="mp3", bitrate="192k")
     if os.path.exists(tmp):
