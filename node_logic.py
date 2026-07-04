@@ -329,7 +329,9 @@ class FishSpeechUnifiedBatch:
             if final is not None:
                 _write_mp3(final, sr_out, mp3_path)
                 _log(f"   ✅ MP3 guardado: {mp3_path}")
-                last_audio = {"waveform": final, "sample_rate": sr_out}
+                # ComfyUI AUDIO exige (batch, channels, samples) = 3D → (1, 1, N)
+                waveform_3d = final if final.ndim == 3 else final.unsqueeze(1)
+                last_audio = {"waveform": waveform_3d, "sample_rate": sr_out}
                 mp3_list.append(mp3_path)
             else:
                 _log("   ⚠️ Formas de onda vacía")
