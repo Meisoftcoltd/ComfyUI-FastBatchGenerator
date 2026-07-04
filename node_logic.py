@@ -124,6 +124,13 @@ class FishSpeechUnifiedBatch:
                 "reference_audio": ("AUDIO",),
                 "prompt_text": ("STRING", {"multiline": True, "default": ""}),
                 "trigger_in": ("*", {"forceInput": True}),
+                # ── Normalización de volumen (de FishSpeechDecoder) ──
+                "normalize_audio": ("BOOLEAN", {"default": True}),
+                "target_peak_db": ("FLOAT", {"default": -1.0, "min": -10.0, "max": 0.0, "step": 0.1}),
+                # ── Time Stretch / Pitch (de AudioTimeStretchPedalboard) ──
+                "time_stretch_enabled": ("BOOLEAN", {"default": False}),
+                "speed_factor": ("FLOAT", {"default": 1.0, "min": 0.50, "max": 2.00, "step": 0.01}),
+                "pitch_shift_semitones": ("FLOAT", {"default": 0.0, "min": -12.0, "max": 12.0, "step": 0.01}),
             },
         }
 
@@ -145,6 +152,12 @@ class FishSpeechUnifiedBatch:
         repetition_penalty: float, chunk_length: int, max_new_tokens: int,
         silence_duration: float,
         reference_audio=None, prompt_text: str = "", trigger_in=None,
+        # ── Nuevos parámetros de post-proceso ──
+        normalize_audio: bool = True,
+        target_peak_db: float = -1.0,
+        time_stretch_enabled: bool = False,
+        speed_factor: float = 1.0,
+        pitch_shift_semitones: float = 0.0,
     ):
         comfy_out = pathlib.Path(folder_paths.get_output_directory())
         logs: list[str] = []
@@ -305,11 +318,12 @@ class FishSpeechUnifiedBatch:
                 wav_out = fake.cpu()
                 del igp, sem, fake
 
-                # Normalizar -1 dB peak
-                mx = torch.max(torch.abs(wav_out))
-                if mx > 0:
-                    tgt = 10 ** (-1.0 / 20)
-                    wav_out = wav_out * (tgt / mx)
+                # Normalización de volumen (de FishSpeechDecoder.decode_audio)
+                if normalize_audio:
+                    mx = torch.max(torch.abs(wav_out))
+                    if mx > 0:
+                        target_linear = 10 ** (target_peak_db / 20.0)
+                        wav_out = wav_out * (target_linear / mx)
 
                 sr_out = dec_model.sample_rate
 
@@ -327,6 +341,22 @@ class FishSpeechUnifiedBatch:
             del audios
 
             if final is not None:
+                # ── Time Stretch / Pitch Shift (de AudioTimeStretchPedalboard) ──
+                if time_stretch_enabled and not (speed_factor == 1.0 and pitch_shift_semitones == 0.0):
+                    _log(f"   🎸 Time Stretch: {speed_factor}x velocidad, {pitch_shift_semitones:+.1f} semitonos")
+                    try:
+                        from pedalboard import time_stretch as pb_time_stretch
+                    except ImportError:
+                        _log("   ⚠️ pedalboard no disponible, saltando time stretch")
+                    else:
+                        ts_np = final.squeeze().cpu().numpy().astype(np.float32)
+                        ts_processed = pb_time_stretch(
+                            ts_np, float(sr_out),
+                            stretch_factor=float(speed_factor),
+                            pitch_shift_in_semitones=float(pitch_shift_semitones),
+                        )
+                        final = torch.from_numpy(ts_processed).unsqueeze(0)
+
                 _write_mp3(final, sr_out, mp3_path)
                 _log(f"   ✅ MP3 guardado: {mp3_path}")
                 # ComfyUI AUDIO exige (batch, channels, samples) = 3D → (1, 1, N)
