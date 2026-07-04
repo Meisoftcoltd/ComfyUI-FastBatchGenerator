@@ -186,13 +186,25 @@ class FishSpeechUnifiedBatch:
             groups = [str(t).strip() for t in text_list if str(t).strip()]
         else:
             raw = text_list
-            groups = [g.strip() for g in raw.split("\n\n") if g.strip()]
-            if not groups or (len(groups) == 1 and "\n\n" not in raw):
-                groups = [raw]
+            # Estrategia 1: dividir por doble salto de línea (formato original)
+            candidate = [g.strip() for g in raw.split("\n\n") if g.strip()]
+            # Estrategia 2: dividir por solo un salto de línea si S1 no da match con stems
+            if len(candidate) != len(stems):
+                candidate = [g.strip() for g in raw.split("\n") if g.strip()]
+                # Si split("\n") produce DEMASIADOS grupos (más que archivos), 
+                # significa que eran líneas internas del texto → volver a S1 / S3
+                if len(candidate) > len(stems):
+                    candidate = [g.strip() for g in raw.split("\n\n") if g.strip()]
+                    if not candidate or (len(candidate) == 1 and "\n\n" not in raw):
+                        candidate = [raw] if raw.strip() else []
+            groups = candidate
         while len(groups) < len(stems):
             groups.append("")
 
         _log(f"📝 {len(groups)} textos → {len(stems)} archivos destino")
+        for gi, g in enumerate(groups):
+            preview = repr(g[:80]) + ("..." if len(g) > 80 else "")
+            _log(f"   [{gi}] {preview}")
 
         # ── 1. Splitter ───────────────────────────────
         if "Párrafos" in split_mode:
