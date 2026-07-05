@@ -1,0 +1,35 @@
+[project]
+name = "comfyui-fastbatchgenerator"
+version = "0.2.0-dev1"
+description = "FishSpeech TTS batch processor + Multi-agent storyboard director and Flux2 keyframe generator for audio-driven video production pipelines in ComfyUI"
+license = {text="MIT"}
+requires-python = ">=3.10"
+
+dependencies = [
+    "torch>=2.0",
+    "torchaudio>=2.0",
+    "pydub>=0.25.1",
+    "numpy<2.0",
+    "pedalboard>=0.3.0",
+    "ollama>=0.4.0",
+]
+
+# ───────────────────────
+# ComfyUI metadata       #
+# ───────────────────────
+[tool.comfyui]
+display_name = "🚀 FastBatch + Storyboard Director"
+author = "meisoftcoltd@gmail.com"
+node-count = 4
+
+[[tool.comfyui.nodes]]
+id = ["FishSpeechUnifiedBatch"]
+category = "Audio/BatchTTS FishSpeech/UnifiedBatchProcessor"
+
+[[tool.comfyui.nodes]]
+id = ["AudioStoryboardDirector"]
+category = "Video Production/DirectorTools"
+
+[[tool.comfyui.nodes]]
+id = ["Flux2KeyframeGenerator"]
+category = "Video Production/Keyframes"
