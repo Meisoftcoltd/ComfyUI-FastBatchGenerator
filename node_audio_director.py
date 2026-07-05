@@ -20,13 +20,14 @@ from typing import Any, Tuple, Optional
 import folder_paths
 import torch
 
-# Add ComfyUI-fish-speech to path so we can import its nodes directly
+# Load FishSpeechWhisperTranscriber directly from ComfyUI-fish-speech/nodes.py
+# via importlib to avoid module name collision with ComfyUI/nodes.py
 _fs_base = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../ComfyUI-fish-speech")
-if _fs_base not in sys.path:
-    sys.path.insert(0, _fs_base)
-
-# FishSpeechWhisperTranscriber lives at ComfyUI-fish-speech/nodes.py (registered package-free as 'nodes')
-from nodes import FishSpeechWhisperTranscriber
+import importlib.util as _iutil
+_spec = _iutil.spec_from_file_location("fs_nodes", os.path.join(_fs_base, "nodes.py"))
+_fs_mod = _iutil.module_from_spec(_spec)
+_spec.loader.exec_module(_fs_mod)
+FishSpeechWhisperTranscriber = _fs_mod.FishSpeechWhisperTranscriber
 
 try:
     import ollama

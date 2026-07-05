@@ -7,10 +7,10 @@ from typing import Any, List, Optional, Tuple
 import torch
 
 # Módulos propios del paquete
-from .flux_helpers import get_output_dir, resolve_aspect, save_image
-from .flux_ollama import connect_ollama, query_agent, AGENTE_2_SYSTEM_PROMPT
-from .flux_models import load_flux_models, unload_flux
-from .flux_clip import clip_tokenize_encode, clip_encode_zeros
+from flux_helpers import get_output_dir, resolve_aspect, save_image
+from flux_ollama import connect_ollama, query_agent, AGENTE_2_SYSTEM_PROMPT
+from flux_models import load_flux_models, unload_flux
+from flux_clip import clip_tokenize_encode, clip_encode_zeros
 
 
 # ═══════════════ CLASE PRINCIPAL ═══════════════
